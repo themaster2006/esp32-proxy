@@ -1,19 +1,16 @@
 from flask import Flask, request, jsonify
 import requests
 import re
+import os
 
 app = Flask(__name__)
 
 GEMINI_API_KEY = "AIzaSyAIcI_wiHFS1MPj_HiYsRdzAzWzq4KQw90"
 
 def limpiar_texto(texto):
-    # Eliminar markdown bold/italic
     texto = re.sub(r'\*+', '', texto)
-    # Eliminar numeración tipo "1.  "
     texto = re.sub(r'\d+\.\s+', '', texto)
-    # Reemplazar saltos de línea múltiples por uno solo
     texto = re.sub(r'\n+', ' ', texto)
-    # Recortar a 200 caracteres para no saturar MicroPython
     if len(texto) > 200:
         texto = texto[:200] + "..."
     return texto.strip()
@@ -64,4 +61,5 @@ def ping():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
