@@ -5,7 +5,7 @@ import os
 
 app = Flask(__name__)
 
-GEMINI_API_KEY = "AIzaSyAIcI_wiHFS1MPj_HiYsRdzAzWzq4KQw90"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "PON_AQUI_TU_API_KEY")
 
 def limpiar_texto(texto):
     texto = re.sub(r'\*+', '', texto)
@@ -17,23 +17,39 @@ def limpiar_texto(texto):
 
 @app.route("/ia", methods=["POST"])
 def ia():
-    prompt = request.json.get("prompt")
+    data_in = request.get_json(silent=True) or {}
+    prompt = (data_in.get("prompt") or "").strip()
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={GEMINI_API_KEY}"
+    if not prompt:
+        return jsonify({"respuesta": "PROMPT_VACIO"}), 400
 
-    data = {
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
+    params = {"key": GEMINI_API_KEY}
+
+    payload = {
         "contents": [
             {
                 "parts": [
-                    {"text": f"Eres un asistente útil. Responde en español de forma muy breve, sin markdown, sin asteriscos, sin listas. Máximo 2 oraciones. {prompt}"}
+                    {
+                        "text": "Eres un asistente útil. Responde en español de forma muy breve, sin markdown, sin asteriscos, sin listas. Máximo 2 oraciones. {}".format(prompt)
+                    }
                 ]
             }
         ]
     }
 
     try:
-        r = requests.post(url, json=data)
-        res = r.json()
+        r = requests.post(url, params=params, json=payload, timeout=30)
+
+        try:
+            res = r.json()
+        except Exception:
+            return jsonify({
+                "respuesta": "ERROR_API",
+                "detalle": "Respuesta no JSON",
+                "status_code": r.status_code
+            }), 500
+
         print("DEBUG GEMINI:", res)
 
         if "candidates" in res:
@@ -45,20 +61,28 @@ def ia():
             return jsonify({"respuesta": respuesta})
 
         if "error" in res:
-            print("GEMINI ERROR:", res["error"].get("message"))
-            return jsonify({"respuesta": "ERROR_API"})
+            mensaje = res["error"].get("message", "Error desconocido")
+            print("GEMINI ERROR:", mensaje)
+            return jsonify({
+                "respuesta": "ERROR_API",
+                "detalle": mensaje
+            }), 500
 
-        return jsonify({"respuesta": "ERROR_NO_RESPONSE"})
+        return jsonify({
+            "respuesta": "ERROR_NO_RESPONSE",
+            "detalle": str(res)
+        }), 500
 
     except Exception as e:
         print("ERROR:", e)
-        return jsonify({"respuesta": "ERROR_EXCEPTION"})
-
+        return jsonify({
+            "respuesta": "ERROR_EXCEPTION",
+            "detalle": str(e)
+        }), 500
 
 @app.route("/ping")
 def ping():
-    return "ok"
-
+    return "ok", 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
